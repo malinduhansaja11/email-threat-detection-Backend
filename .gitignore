@@ -1,0 +1,96 @@
+# -------------------------
+# Python
+# -------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.pyre/
+*.pyo
+
+# -------------------------
+# Virtual environments
+# -------------------------
+.venv/
+venv/
+ENV/
+env/
+.env/
+.conda/
+
+# -------------------------
+# Environment / secrets
+# -------------------------
+.env
+.env.*
+*.env
+*.key
+*.pem
+
+# -------------------------
+# FastAPI / Uvicorn
+# -------------------------
+*.log
+logs/
+uvicorn.log
+
+# -------------------------
+# Build / packaging
+# -------------------------
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+wheelhouse/
+
+# -------------------------
+# Jupyter
+# -------------------------
+.ipynb_checkpoints/
+
+# -------------------------
+# OS files
+# -------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# -------------------------
+# IDEs / editors
+# -------------------------
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# -------------------------
+# Coverage
+# -------------------------
+.coverage
+htmlcov/
+coverage.xml
+
+# -------------------------
+# TypeScript / Node (if you later add a frontend)
+# -------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist/
+build/
+
+# -------------------------
+# Local data / temp
+# -------------------------
+tmp/
+temp/
+*.sqlite3
+*.db
