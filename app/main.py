@@ -1,14 +1,35 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from .schemas import PredictRequest, PredictResponse
-from .email_store import EmailStore
+import os
 import re
+from pathlib import Path
 
-app = FastAPI(title="Obfuscation Detector API (Mock)")
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+
+from .schemas import PredictRequest, PredictResponse, AnalyzeResponse
+from .email_store import EmailStore
+from .gmail_oauth import get_auth_url, exchange_code_for_token, load_credentials, clear_token
+from .gmail_fetch import fetch_inbox
+
+# NEW: analyzer (ML model)
+from .analyzer import analyze_body
+
+
+ENV_PATH = Path(__file__).resolve().parents[1] / ".env"   # backend/.env
+load_dotenv(ENV_PATH)
+
+print("GOOGLE_CLIENT_ID:", os.getenv("GOOGLE_CLIENT_ID"))
+print("GOOGLE_CLIENT_SECRET:", "SET" if os.getenv("GOOGLE_CLIENT_SECRET") else None)
+
+app = FastAPI(title="Obfuscation Detector API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5177",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -16,10 +37,15 @@ app.add_middleware(
 
 store = EmailStore()
 
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
+
+# ----------------------------
+# OLD MOCK DETECTOR (keep)
+# ----------------------------
 @app.post("/predict", response_model=PredictResponse)
 def predict(req: PredictRequest):
     tokens = [t for t in re.split(r"\s+", req.body.strip()) if t]
@@ -36,9 +62,36 @@ def predict(req: PredictRequest):
         risk_score=risk_score,
     )
 
+
+# ----------------------------
+# NEW ML ANALYZER
+# ----------------------------
+@app.post("/analyze", response_model=AnalyzeResponse)
+def analyze(req: PredictRequest):
+    try:
+        result = analyze_body(req.body)
+        return AnalyzeResponse(**result)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analyze failed: {str(e)}")
+
+
+# ----------------------------
+# EMAIL STORE / GMAIL
+# ----------------------------
 @app.get("/emails")
 def list_emails():
     return store.list()
+
+
+@app.get("/emails/gmail")
+def gmail_emails():
+    emails = fetch_inbox(max_results=15)
+    if emails is None:
+        return {"connected": False, "emails": []}
+    return {"connected": True, "emails": emails}
+
 
 @app.get("/emails/{email_id}")
 def get_email(email_id: str):
@@ -65,4 +118,42 @@ def seed_emails():
         subject="Meeting Notes",
         body="Hi team, meeting is at 3pm. Agenda shared in doc."
     )
+
     return {"status": "seeded", "count": len(store.list())}
+
+
+# ----------------------------
+# AUTH
+# ----------------------------
+@app.get("/auth/status")
+def auth_status():
+    try:
+        return {"connected": load_credentials() is not None}
+    except Exception as e:
+        return {"connected": False, "error": str(e)}
+
+
+@app.post("/auth/logout")
+def logout():
+    clear_token()
+    return {"ok": True}
+
+
+@app.get("/auth/google/login")
+def google_login():
+    url = get_auth_url()
+    return RedirectResponse(url)
+
+
+@app.get("/auth/google/callback")
+def google_callback(request: Request, code: str | None = None):
+    if not code:
+        return {"error": "Missing code", "query": dict(request.query_params)}
+
+    try:
+        exchange_code_for_token(code)
+    except Exception as e:
+        return {"error": str(e), "query": dict(request.query_params)}
+
+    frontend = os.getenv("FRONTEND_REDIRECT", "http://localhost:5173/inbox")
+    return RedirectResponse(f"{frontend}?connected=1")
