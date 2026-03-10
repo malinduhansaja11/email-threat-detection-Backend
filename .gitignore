@@ -4,12 +4,12 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyo
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .pytype/
 .pyre/
-*.pyo
 
 # -------------------------
 # Virtual environments
@@ -18,7 +18,6 @@ __pycache__/
 venv/
 ENV/
 env/
-.env/
 .conda/
 
 # -------------------------
@@ -29,6 +28,7 @@ env/
 *.env
 *.key
 *.pem
+token.json
 
 # -------------------------
 # FastAPI / Uvicorn
@@ -77,15 +77,13 @@ htmlcov/
 coverage.xml
 
 # -------------------------
-# TypeScript / Node (if you later add a frontend)
+# Node / frontend
 # -------------------------
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-dist/
-build/
 
 # -------------------------
 # Local data / temp
@@ -94,3 +92,20 @@ tmp/
 temp/
 *.sqlite3
 *.db
+
+# -------------------------
+# ML / model artifacts
+# -------------------------
+*.pkl
+*.joblib
+*.safetensors
+*.bin
+
+
+# -------------------------
+# Optional: keep large trained models out of git
+# -------------------------
+header_spoofing/models/
+url_threat_detection/models/
+
+**/model.safetensors
