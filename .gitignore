@@ -95,3 +95,8 @@ temp/
 *.sqlite3
 *.db
 app/token.json
+
+# Ignore all model folders
+models/
+app/models/
+url_threat_detection/models/
