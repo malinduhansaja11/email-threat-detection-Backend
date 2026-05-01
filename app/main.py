@@ -23,13 +23,15 @@ from .temporal_evasion.routes import router as temporal_evasion_router
 from .header_spoofing.routes import router as header_spoofing_router
 # ─────────────────────────────────────────────────────────────────────────────
 
+from .full_email_scan import router as full_email_scan_router
+
 # === Pramudika — URL Threat Detection ===
 from url_threat_detection.routes import router as url_router
 app = FastAPI(title="Obfuscation Detector API")
 app.include_router(url_router)
 app.include_router(header_spoofing_router)
 app.include_router(temporal_evasion_router)
-
+app.include_router(full_email_scan_router)
 
 # NEW: analyzer (ML model)
 
