@@ -3,64 +3,57 @@ import re
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from firebase_admin import firestore
 
-from .inbox_scanner import scan_inbox
-from .schemas import PredictRequest, PredictResponse 
-from .email_store import EmailStore
 from .analyzer import analyze_body
-
-from .gmail_oauth import get_auth_url, exchange_code_for_token, load_credentials, clear_token
-from .gmail_fetch import fetch_inbox
-
-# ── NEW: Kaveesha's Temporal-Evasion module ───────────────────────────────────
-from .temporal_evasion.routes import router as temporal_evasion_router
-# ─────────────────────────────────────────────────────────────────────────────
-
-# ── NEW: Ayani's Header-Spoofing module ───────────────────────────────────────
-from .header_spoofing.routes import router as header_spoofing_router
-# ─────────────────────────────────────────────────────────────────────────────
-
+from .auth_guard import db as firebase_db
+from .auth_guard import require_approved_firebase_user
+from .email_store import EmailStore
 from .full_email_scan import router as full_email_scan_router
+from .gmail_fetch import fetch_inbox
+from .gmail_oauth import (
+    clear_token,
+    exchange_code_for_token,
+    get_auth_url,
+    load_credentials,
+    make_oauth_state,
+    read_oauth_state,
+)
+from .header_spoofing.routes import router as header_spoofing_router
+from .inbox_scanner import scan_inbox
+from .schemas import PredictRequest, PredictResponse
+from .temporal_evasion.routes import router as temporal_evasion_router
 
-# === Pramudika — URL Threat Detection ===
+# Pramudika — URL Threat Detection
 from url_threat_detection.routes import router as url_router
-app = FastAPI(title="Obfuscation Detector API")
-app.include_router(url_router)
-app.include_router(header_spoofing_router)
-app.include_router(temporal_evasion_router)
-app.include_router(full_email_scan_router)
 
-# NEW: analyzer (ML model)
-
-
-
-
-ENV_PATH = Path(__file__).resolve().parents[1] / ".env"   # backend/.env
+ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(ENV_PATH)
 
-print("GOOGLE_CLIENT_ID:", os.getenv("GOOGLE_CLIENT_ID"))
-print("GOOGLE_CLIENT_SECRET:", "SET" if os.getenv("GOOGLE_CLIENT_SECRET") else None)
-
-
-store = EmailStore()
+app = FastAPI(title="Obfuscation Detector API")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+        "http://127.0.0.1:5173",
         "http://localhost:5177",
+        "http://127.0.0.1:5177",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(url_router)
+app.include_router(header_spoofing_router)
+app.include_router(temporal_evasion_router)
+app.include_router(full_email_scan_router)
+
 store = EmailStore()
-
-
 
 @app.get("/health")
 def health():
@@ -68,7 +61,7 @@ def health():
 
 
 # ----------------------------
-# OLD MOCK DETECTOR (keep)
+# OLD MOCK DETECTOR
 # ----------------------------
 @app.post("/predict", response_model=PredictResponse)
 def predict(req: PredictRequest):
@@ -76,6 +69,7 @@ def predict(req: PredictRequest):
     labels = [1 if re.search(r"[@_$\d]", t) else 0 for t in tokens]
     scores = [0.9 if lbl == 1 else 0.05 for lbl in labels]
     obf_tokens = [t for t, lbl in zip(tokens, labels) if lbl == 1]
+
     risk_score = 0 if len(tokens) == 0 else round((len(obf_tokens) / len(tokens)) * 100)
 
     return PredictResponse(
@@ -88,21 +82,8 @@ def predict(req: PredictRequest):
 
 
 # ----------------------------
-# NEW ML ANALYZER
+# ML ANALYZER
 # ----------------------------
-
-    
-# @app.post("/analyze")
-# def analyze(req: PredictRequest):
-#     try:
-#         return analyze_body(req.body, req.model_type)
-#     except Exception as e:
-#         import traceback
-#         return {
-#             "error": str(e),
-#             "trace": traceback.format_exc()
-#         }
-
 @app.post("/analyze", response_model=PredictResponse)
 def analyze(req: PredictRequest):
     return analyze_body(req.body)
@@ -112,99 +93,169 @@ def analyze(req: PredictRequest):
 # EMAIL STORE / GMAIL
 # ----------------------------
 @app.get("/emails")
-def list_emails():
+def list_emails(user=Depends(require_approved_firebase_user)):
     return store.list()
 
 
-@app.get("/emails/gmail")
-def gmail_emails():
-    emails = fetch_inbox(max_results=15)
-    if emails is None:
-        return {"connected": False, "emails": []}
-    return {"connected": True, "emails": emails}
-
-
-# ── Kaveesha: AUTO-SCAN — must be before /emails/{email_id} ─────────────────
-@app.get("/emails/scan")
-def scan_all_emails():
-    """
-    Fetch inbox emails and auto-run Kaveesha temporal model on each.
-    Returns every email enriched with a 'threat' object.
-    """
-    try:
-        gmail_result = scan_inbox(source="gmail", max_results=20)
-        if gmail_result["connected"]:
-            return gmail_result
-    except Exception:
-        pass
-    return scan_inbox(source="demo", max_results=20)
-
-
-@app.get("/emails/{email_id}")
-def get_email(email_id: str):
-    item = store.get(email_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Email not found")
-    return item
-
-
-
 @app.post("/emails/seed")
-def seed_emails():
+def seed_emails(user=Depends(require_approved_firebase_user)):
     store.add(
         sender="billing@demo.com",
         subject="Invoice Update",
-        body="Please verify your invoice2025 details and api_v2 changes."
+        body="Please verify your invoice2025 details and api_v2 changes.",
     )
+
     store.add(
         sender="security@demo.com",
         subject="Account Alert",
-        body="Urgent: reset your p@ssw0rd now. Click link ASAP."
+        body="Urgent: reset your p@ssw0rd now. Click link ASAP.",
     )
+
     store.add(
         sender="team@demo.com",
         subject="Meeting Notes",
-        body="Hi team, meeting is at 3pm. Agenda shared in doc."
+        body="Hi team, meeting is at 3pm. Agenda shared in doc.",
     )
 
     return {"status": "seeded", "count": len(store.list())}
 
 
+@app.get("/emails/gmail")
+def gmail_emails(user=Depends(require_approved_firebase_user)):
+    uid = user["uid"]
+
+    try:
+        emails = fetch_inbox(uid=uid, max_results=15)
+
+        if emails is None:
+            return {
+                "connected": False,
+                "emails": [],
+                "message": "Gmail is not connected for this user",
+            }
+
+        return {
+            "connected": True,
+            "emails": emails,
+        }
+
+    except Exception as e:
+        error_message = str(e)
+        print("\n================ GMAIL FETCH ERROR ================")
+        print(error_message)
+        print("===================================================\n")
+
+        return {
+            "connected": False,
+            "emails": [],
+            "error": error_message,
+        }
+
+
+@app.get("/emails/scan")
+def scan_all_emails(user=Depends(require_approved_firebase_user)):
+    uid = user["uid"]
+
+    try:
+        gmail_result = scan_inbox(uid=uid, source="gmail", max_results=20)
+
+        if gmail_result["connected"]:
+            return gmail_result
+
+    except Exception:
+        pass
+
+    return scan_inbox(source="demo", max_results=20)
+
+
+@app.get("/emails/{email_id}")
+def get_email(email_id: str, user=Depends(require_approved_firebase_user)):
+    item = store.get(email_id)
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    return item
+
+
 # ----------------------------
-# AUTH
+# AUTH / GMAIL BINDING
 # ----------------------------
 @app.get("/auth/status")
-def auth_status():
+def auth_status(user=Depends(require_approved_firebase_user)):
+    uid = user["uid"]
+
     try:
-        return {"connected": load_credentials() is not None}
+        creds = load_credentials(uid)
+
+        return {
+            "connected": creds is not None,
+        }
+
     except Exception as e:
-        return {"connected": False, "error": str(e)}
+        print("AUTH STATUS ERROR:", str(e))
 
+        return {
+            "connected": False,
+            "error": str(e),
+        }
 
-@app.post("/auth/logout")
-def logout():
-    clear_token()
-    return {"ok": True}
+@app.post("/auth/google/start")
+def google_start(user=Depends(require_approved_firebase_user)):
+    uid = user["uid"]
 
+    state = make_oauth_state(uid)
+    url = get_auth_url(state)
 
-@app.get("/auth/google/login")
-def google_login():
-    url = get_auth_url()
-    return RedirectResponse(url)
+    return {"url": url}
 
 
 @app.get("/auth/google/callback")
-def google_callback(request: Request, code: str | None = None):
-    if not code:
-        return {"error": "Missing code", "query": dict(request.query_params)}
+def google_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+):
+    if not code or not state:
+        return {
+            "error": "Missing code or state",
+            "query": dict(request.query_params),
+        }
 
     try:
-        exchange_code_for_token(code)
+        uid = read_oauth_state(state)
+        exchange_code_for_token(code=code, uid=uid)
+
+        firebase_db.collection("users").document(uid).set(
+            {
+                "gmailConnected": True,
+                "gmailBoundAt": firestore.SERVER_TIMESTAMP,
+            },
+            merge=True,
+        )
+
     except Exception as e:
-        return {"error": str(e), "query": dict(request.query_params)}
+        return {
+            "error": str(e),
+            "query": dict(request.query_params),
+        }
 
     frontend = os.getenv("FRONTEND_REDIRECT", "http://localhost:5173/inbox")
     return RedirectResponse(f"{frontend}?connected=1")
 
 
+@app.post("/auth/logout")
+def logout(user=Depends(require_approved_firebase_user)):
+    uid = user["uid"]
 
+    clear_token(uid)
+
+    firebase_db.collection("users").document(uid).set(
+        {
+            "gmailConnected": False,
+            "gmailDisconnectedAt": firestore.SERVER_TIMESTAMP,
+        },
+        merge=True,
+    )
+
+    return {"ok": True}

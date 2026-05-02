@@ -109,3 +109,9 @@ header_spoofing/models/
 url_threat_detection/models/
 
 **/model.safetensors
+
+
+.env
+app/token.json
+app/user_tokens/
+serviceAccountKey.json

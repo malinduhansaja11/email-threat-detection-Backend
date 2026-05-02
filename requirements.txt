@@ -24,3 +24,5 @@ beautifulsoup4
 shap
 
 scipy
+
+firebase-admin
