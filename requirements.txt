@@ -2,6 +2,7 @@ fastapi
 uvicorn[standard]
 pydantic
 python-multipart
+python-whois
 google-auth
 google-auth-oauthlib
 google-api-python-client
@@ -12,7 +13,7 @@ numpy
 torch
 transformers
 safetensors
-
+pandas
 
 gdown
 xgboost
@@ -22,6 +23,7 @@ tldextract
 validators
 beautifulsoup4
 shap
+requests
 
 scipy
 

@@ -53,7 +53,7 @@ class URLRedirectionDetector:
                 'final_url': current_url, 'total_ms': round((time.time()-start_time)*1000, 1)}
 
     def compute_suspicion_score(self, original_url, trace_result, ml_prediction=None):
-        score   = 0.0
+        score   = 1.0
         reasons = []
         chain   = trace_result['chain']
         hops    = trace_result['total_hops']

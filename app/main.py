@@ -60,9 +60,9 @@ def health():
     return {"status": "ok"}
 
 
-# ----------------------------
+
 # OLD MOCK DETECTOR
-# ----------------------------
+
 @app.post("/predict", response_model=PredictResponse)
 def predict(req: PredictRequest):
     tokens = [t for t in re.split(r"\s+", req.body.strip()) if t]
@@ -81,17 +81,17 @@ def predict(req: PredictRequest):
     )
 
 
-# ----------------------------
+
 # ML ANALYZER
-# ----------------------------
+
 @app.post("/analyze", response_model=PredictResponse)
 def analyze(req: PredictRequest):
     return analyze_body(req.body)
 
 
-# ----------------------------
+
 # EMAIL STORE / GMAIL
-# ----------------------------
+
 @app.get("/emails")
 def list_emails(user=Depends(require_approved_firebase_user)):
     return store.list()
@@ -178,9 +178,9 @@ def get_email(email_id: str, user=Depends(require_approved_firebase_user)):
     return item
 
 
-# ----------------------------
+
 # AUTH / GMAIL BINDING
-# ----------------------------
+
 @app.get("/auth/status")
 def auth_status(user=Depends(require_approved_firebase_user)):
     uid = user["uid"]

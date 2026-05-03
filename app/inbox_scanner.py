@@ -1,7 +1,7 @@
-# =============================================================================
+
 # app/inbox_scanner.py — Auto-scan all inbox emails
 # Fetches inbox emails and runs the temporal evasion model on each one.
-# =============================================================================
+
 
 from typing import Any, Dict, Optional
 

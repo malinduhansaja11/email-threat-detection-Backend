@@ -4,13 +4,13 @@
 whitelist_words = set([
     "road", "years", "there", "are", "how", "to", "it", "i", "can", "use", "the",
 
-    # extra safe/common words
-    "account", "accounts", "service", "services", "anything", "changed",
-    "change", "signin", "sign-in", "email", "security", "google",
-    "recovery", "alert", "copy", "remove", "check", "activity",
-    "important", "password", "welcome", "back", "secure", "new",
-    "this", "that", "was", "need", "also", "received", "changes",
-    "your", "you", "for", "help", "update"
+    # # extra safe/common words
+    # "account", "accounts", "service", "services", "anything", "changed",
+    # "change", "signin", "sign-in", "email", "security", "google",
+    # "recovery", "alert", "copy", "remove", "check", "activity",
+    # "important", "password", "welcome", "back", "secure", "new",
+    # "this", "that", "was", "need", "also", "received", "changes",
+    # "your", "you", "for", "help", "update"
 ])
 
 
@@ -142,15 +142,19 @@ r'^<?[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}>?[.,;:]?$',
 
 # mailto format
 r'^<?mailto:[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}>?[.,;:]?$',
-    # -----------------------------
-    # Websites
-    # -----------------------------
-    r'^www\.[\w\.-]+\.\w+[/\w\.-]*$',
-    r'^https?:\/\/[\w\.-]+\.\w+([\/\w\.-]*)?$',
 
-    # websites with trailing punctuation
-    r'^www\.[\w\.-]+\.\w+[/\w\.-]*\.$',
-    r'^https?:\/\/[\w\.-]+\.\w+([\/\w\.-]*)?\.$',
+
+# Normal websites:
+
+r'^(?:https?:\/\/)?(?:www\.)?[\w\.-]+\.[A-Za-z]{2,}(?::\d{1,5})?(?:[\/?#][^\s]*)?[.,!?)]?$',
+
+# Localhost URLs:
+
+r'^(?:https?:\/\/)?localhost(?::\d{1,5})?(?:[\/?#][^\s]*)?[.,!?)]?$',
+
+# IP address URLs:
+
+r'^(?:https?:\/\/)?(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?:[\/?#][^\s]*)?[.,!?)]?$',
 
     # -----------------------------
     # IP addresses

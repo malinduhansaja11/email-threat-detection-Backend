@@ -1,25 +1,3 @@
-"""
-temporal_evasion/predictor.py
-══════════════════════════════════════════════════════════════════════════════
-Temporal-Evasion Detection Module — Kaveesha
-Based on: Kaveesha_Temporal_Evasion_Pipeline.ipynb
-
-Pipeline summary (from notebook):
-  • Datasets   : 8 CSVs from MyDrive/KaveeshaDatasets/
-  • Text       : TF-IDF (max_features=8000, ngram=(1,2)) on subject + message
-  • Temporal   : 11 time-based features engineered per email
-      hour, hour_sin, hour_cos, is_suspicious_time, is_burst,
-      time_drift, day_of_week, is_weekend, arrival_epoch,
-      burst_count, is_anomaly
-  • Models     : RF(2200 trees) + XGBoost(800 trees) + Calibrated-SGD/SVM
-  • Meta-judge : LogisticRegression stacker
-  • PKL bundle : GLOBAL_TEMPORAL_EVASION_ULTIMATE_FINAL.pkl
-      Keys: vectorizer, label_encoder, rf_model, xgb_model,
-            svm_model, meta_model, scanned_metrics
-
-If the .pkl is absent the module falls back to a rule-based engine so
-the server still starts and returns meaningful results.
-"""
 
 from __future__ import annotations
 
@@ -27,6 +5,7 @@ import math
 import os
 import re
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
@@ -79,7 +58,14 @@ def _extract_temporal_features(payload: Dict[str, Any]) -> np.ndarray:
     All values derived from the email metadata supplied in the API request.
     """
     # ── raw inputs ────────────────────────────────────────────────────────────
-    sent_at: str  = payload.get("sent_at", "")        # ISO-8601 or empty
+    sent_at = (
+    payload.get("sent_at")
+    or payload.get("date")
+    or payload.get("email_date")
+    or payload.get("received_at")
+    or payload.get("internalDate")
+    or ""
+)       # ISO-8601 or empty
     body:    str  = payload.get("body",    "")
     subject: str  = payload.get("subject", "")
     burst_count_raw: int = int(payload.get("burst_count", 1))
@@ -116,16 +102,57 @@ def _extract_temporal_features(payload: Dict[str, Any]) -> np.ndarray:
     ], dtype=np.float64)
 
 
-def _parse_dt(sent_at: str) -> datetime:
-    """Parse ISO string; fall back to current UTC time."""
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%SZ",
-                "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M"):
-        try:
-            return datetime.strptime(sent_at, fmt).replace(tzinfo=timezone.utc)
-        except (ValueError, TypeError):
-            pass
-    return datetime.now(timezone.utc)
+def _parse_dt(sent_at: Any) -> datetime:
+    """
+    Parse email timestamp from Gmail/API payload.
+    Supports:
+    - ISO timestamps
+    - Gmail Date header format
+    - Gmail internalDate milliseconds
+    """
+    if sent_at is None:
+        raise ValueError("Email sent_at/date is missing")
 
+    sent_at_str = str(sent_at).strip()
+
+    if not sent_at_str:
+        raise ValueError("Email sent_at/date is empty")
+
+    # Gmail internalDate usually comes as milliseconds since epoch
+    if sent_at_str.isdigit():
+        ts = int(sent_at_str)
+
+        # Gmail internalDate is milliseconds, not seconds
+        if ts > 10_000_000_000:
+            ts = ts / 1000
+
+        return datetime.fromtimestamp(ts, tz=timezone.utc)
+
+    # ISO format support
+    try:
+        iso_value = sent_at_str.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(iso_value)
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        return dt.astimezone(timezone.utc)
+    except ValueError:
+        pass
+
+    # Email Date header format:
+    # Example: Tue, 5 Mar 2024 14:22:10 +0530
+    try:
+        dt = parsedate_to_datetime(sent_at_str)
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        pass
+
+    raise ValueError(f"Could not parse email date: {sent_at_str}")
 
 # ── ML inference ──────────────────────────────────────────────────────────────
 
@@ -265,7 +292,18 @@ def predict_temporal_evasion(payload: Dict[str, Any]) -> Dict[str, Any]:
     dict: is_threat, confidence, risk_level, threat_type,
           model_used, temporal_features, indicators
     """
-    temporal = _extract_temporal_features(payload)
+    try:
+        temporal = _extract_temporal_features(payload)
+    except ValueError as exc:
+        return {
+        "is_threat": False,
+        "confidence": 0.0,
+        "risk_level": "unknown",
+        "threat_type": "Temporal Analysis Failed",
+        "model_used": "No model used",
+        "temporal_features": {},
+        "indicators": [f"Email date/time missing or invalid: {exc}"],
+    }
     bundle   = _load_bundle()
     text     = payload.get("subject", "") + " " + payload.get("body", "")
 

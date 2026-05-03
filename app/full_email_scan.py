@@ -11,9 +11,9 @@ from pydantic import BaseModel, Field
 router = APIRouter(prefix="/scan", tags=["Full Email Scan"])
 
 
-# ---------------------------------------------------------
+
 # Request model
-# ---------------------------------------------------------
+
 
 class SingleEmailScanRequest(BaseModel):
     # Common email identifiers
@@ -55,9 +55,8 @@ class SingleEmailScanRequest(BaseModel):
         allow_population_by_field_name = True
 
 
-# ---------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------
+
 
 URL_REGEX = re.compile(
     r"https?://[^\s<>'\"{}|\\^`\[\]]+|www\.[^\s<>'\"{}|\\^`\[\]]+",
@@ -155,9 +154,9 @@ def rank_to_action(rank: int) -> str:
     return "ALLOW"
 
 
-# ---------------------------------------------------------
+
 # Individual scanner runners
-# ---------------------------------------------------------
+
 
 def run_obfuscation_scan(body: str) -> Dict[str, Any]:
     """
@@ -417,9 +416,9 @@ def run_url_scan(email: SingleEmailScanRequest) -> Dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------
+
 # Final combined verdict
-# ---------------------------------------------------------
+
 
 def get_confidence_percent(result: Optional[Dict[str, Any]]) -> float:
     if not result:
@@ -632,9 +631,9 @@ def build_module_summary(modules: Dict[str, Any]) -> Dict[str, Any]:
     return summary
 
 
-# ---------------------------------------------------------
+
 # Main full scan endpoint
-# ---------------------------------------------------------
+
 
 @router.post("/single-email")
 def scan_single_email(email: SingleEmailScanRequest):
